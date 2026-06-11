@@ -1,94 +1,169 @@
-import ProductCard from '@/components/store/ProductCard'
-import { supabase } from '@/lib/supabase'
+'use client'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
+import { ShoppingCart, Heart, Star, Minus, Plus, Truck, Shield, RotateCcw, ChevronLeft } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useCartStore } from '@/lib/cart-store'
+import { formatPrice, getDiscountPercent } from '@/lib/utils'
+import toast from 'react-hot-toast'
+import type { Product } from '@/types/database'
 
-interface PageProps {
-  params: Promise<{ slug: string }>
-  searchParams: Promise<{ sort?: string; page?: string }>
-}
+export default function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const [product, setProduct] = useState<Product | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [quantity, setQuantity] = useState(1)
+  const [activeImage, setActiveImage] = useState(0)
+  const [wished, setWished] = useState(false)
+  const addItem = useCartStore(s => s.addItem)
 
-const CATEGORY_META: Record<string, { name: string; description: string; emoji: string }> = {
-  'fresh-produce': { name: 'Fresh Produce', description: 'Farm-fresh fruits, vegetables, and herbs sourced directly from trusted farms.', emoji: '🥬' },
-  'dairy-cheese': { name: 'Dairy & Cheese', description: 'Artisanal cheeses, fresh dairy products, and creamery favorites.', emoji: '🧀' },
-  'bakery': { name: 'Bakery & Boulangerie', description: 'Handcrafted breads, croissants, and artisan baked goods.', emoji: '🥐' },
-  'chocolates': { name: 'Chocolates & Confectionery', description: 'Premium chocolates, truffles, and sweet indulgences from around the world.', emoji: '🍫' },
-  'tea-coffee': { name: 'Tea, Coffee & Infusions', description: 'Single-origin teas, specialty coffees, and wellness infusions.', emoji: '☕' },
-  'snacks': { name: 'Snacks & Treats', description: 'Gourmet snacking for every craving and occasion.', emoji: '🍿' },
-  'cold-beverages': { name: 'Cold Beverages', description: 'Premium cold drinks, kombuchas, juices, and mixers.', emoji: '🧃' },
-  'organic': { name: 'Organic & Natural', description: 'Certified organic products for a healthier lifestyle.', emoji: '🌱' },
-  'gluten-free': { name: 'Gluten Free', description: 'Delicious gluten-free alternatives for every meal.', emoji: '🌾' },
-  'butchery-seafood': { name: 'Butchery & Seafood', description: 'Premium cuts, fresh seafood, and deli meats.', emoji: '🦐' },
-}
+  useEffect(() => {
+    params.then(({ slug }) => {
+      async function load() {
+        const { data } = await supabase.from('products').select('*').eq('slug', slug).single()
+        setProduct(data)
+        setLoading(false)
+      }
+      load()
+    })
+  }, [params])
 
-async function getCategoryProducts(slug: string, sort?: string) {
-  const { data: category } = await supabase.from('categories').select('id').eq('slug', slug).single()
-  if (!category) return []
+  if (loading) return (
+    <div className="container-custom py-12">
+      <div className="animate-pulse">
+        <div className="grid md:grid-cols-2 gap-12">
+          <div className="aspect-square bg-gray-100 rounded-2xl" />
+          <div className="space-y-4">
+            <div className="h-8 bg-gray-100 rounded w-3/4" />
+            <div className="h-6 bg-gray-100 rounded w-1/2" />
+            <div className="h-24 bg-gray-100 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
-  let query = supabase.from('products').select('*').eq('is_active', true).eq('category_id', category.id)
-  if (sort === 'price_asc') query = query.order('price', { ascending: true })
-  else if (sort === 'price_desc') query = query.order('price', { ascending: false })
-  else query = query.order('created_at', { ascending: false })
+  if (!product) return (
+    <div className="container-custom py-20 text-center">
+      <div className="text-5xl mb-4">😔</div>
+      <h2 className="text-xl font-bold mb-2">Product not found</h2>
+      <Link href="/products" className="btn-primary inline-flex mt-4">Browse Products</Link>
+    </div>
+  )
 
-  const { data } = await query.limit(60)
-  return data || []
-}
-
-export default async function CategoryPage({ params, searchParams }: PageProps) {
-  const { slug } = await params
-  const { sort } = await searchParams
-  const meta = CATEGORY_META[slug] || { name: slug, description: '', emoji: '🛒' }
-  const products = await getCategoryProducts(slug, sort)
+  const images = product.images?.length > 0 ? product.images : ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=600']
+  const discount = getDiscountPercent(product.price, product.compare_price)
 
   return (
     <div className="container-custom py-8">
-      <nav className="text-sm text-gray-500 mb-6">
+      <nav className="text-sm text-gray-500 mb-6 flex items-center gap-2">
         <Link href="/" className="hover:text-brand-600">Home</Link>
-        <span className="mx-2">/</span>
+        <span>/</span>
         <Link href="/products" className="hover:text-brand-600">Products</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-800">{meta.name}</span>
+        <span>/</span>
+        <span className="text-gray-800 line-clamp-1">{product.name}</span>
       </nav>
 
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-3">
-          <span className="text-4xl">{meta.emoji}</span>
-          <h1 className="section-title">{meta.name}</h1>
+      <div className="grid md:grid-cols-2 gap-10 lg:gap-16">
+        <div>
+          <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 mb-3">
+            <Image src={images[activeImage]} alt={product.name} fill className="object-cover" priority />
+            {discount && (
+              <span className="absolute top-4 left-4 bg-orange-500 text-white font-bold px-3 py-1 rounded-full">
+                {discount}% OFF
+              </span>
+            )}
+          </div>
+          {images.length > 1 && (
+            <div className="flex gap-2">
+              {images.map((img, i) => (
+                <button key={i} onClick={() => setActiveImage(i)}
+                  className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors ${i === activeImage ? 'border-brand-500' : 'border-transparent'}`}>
+                  <Image src={img} alt="" fill className="object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        {meta.description && <p className="text-gray-600 max-w-2xl">{meta.description}</p>}
-      </div>
 
-      <div className="flex items-center justify-between mb-6 border-b pb-4">
-        <span className="text-sm text-gray-500">{products.length} products</span>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">Sort by:</span>
-          {[
-            { label: 'Newest', value: '' },
-            { label: 'Price ↑', value: 'price_asc' },
-            { label: 'Price ↓', value: 'price_desc' },
-          ].map(s => (
-            <Link key={s.value}
-              href={`/category/${slug}?sort=${s.value}`}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${(sort || '') === s.value ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-              {s.label}
-            </Link>
-          ))}
+        <div>
+          {product.brand && <p className="text-brand-600 font-semibold text-sm mb-1">{product.brand}</p>}
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
+          <p className="text-gray-500 text-sm mb-1">{product.unit}</p>
+
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex">
+              {[1,2,3,4,5].map(s => <Star key={s} className={`w-4 h-4 ${s <= 4 ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />)}
+            </div>
+            <span className="text-sm text-gray-500">(24 reviews)</span>
+          </div>
+
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-3xl font-bold text-gray-900">{formatPrice(product.price)}</span>
+            {product.compare_price && (
+              <>
+                <span className="text-xl text-gray-400 line-through">{formatPrice(product.compare_price)}</span>
+                <span className="badge badge-orange">{discount}% off</span>
+              </>
+            )}
+          </div>
+
+          {product.description && (
+            <p className="text-gray-600 text-sm leading-relaxed mb-6">{product.description}</p>
+          )}
+
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                <Minus className="w-4 h-4" />
+              </button>
+              <span className="w-12 text-center font-semibold">{quantity}</span>
+              <button onClick={() => setQuantity(q => q + 1)}
+                className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, compare_price: product.compare_price, images: product.images, unit: product.unit, brand: product.brand }, quantity); toast.success('Added to cart!') }}
+              disabled={product.stock_quantity === 0}
+              className="flex-1 btn-primary py-3">
+              <ShoppingCart className="w-4 h-4" />
+              {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+            </button>
+            <button onClick={() => setWished(!wished)}
+              className={`w-12 h-12 border-2 rounded-xl flex items-center justify-center transition-colors ${wished ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-brand-300'}`}>
+              <Heart className={`w-5 h-5 ${wished ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+            </button>
+          </div>
+
+          {product.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {product.tags.map(tag => (
+                <span key={tag} className="badge badge-green">{tag}</span>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3 border-t pt-6">
+            {[
+              { icon: Truck, title: 'Same Day Delivery', desc: 'Order before 2PM for delivery today' },
+              { icon: Shield, title: '100% Authentic', desc: 'Genuine products, always verified' },
+              { icon: RotateCcw, title: 'Easy Returns', desc: '7-day hassle-free return policy' },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Icon className="w-4 h-4 text-brand-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-500">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
-      {products.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="text-5xl mb-4">🛒</div>
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No products in this category yet</h3>
-          <p className="text-gray-500 mb-4">Check back soon or explore other categories.</p>
-          <Link href="/products" className="btn-primary inline-flex">Browse All Products</Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {products.map(product => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
