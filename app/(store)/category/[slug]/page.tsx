@@ -33,7 +33,7 @@ async function getCategoryProducts(slug: string, sort?: string) {
   return data || []
 }
 
-export default async function CategoryPage({ params, searchParams }: PageProps) {
+export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> })  {
   const meta = CATEGORY_META[params.slug] || { name: params.slug, description: '', emoji: '🛒' }
   const products = await getCategoryProducts(params.slug, searchParams.sort)
 
