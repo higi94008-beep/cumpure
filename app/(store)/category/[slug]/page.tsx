@@ -3,8 +3,8 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
 interface PageProps {
-  params: { slug: string }
-  searchParams: { sort?: string; page?: string }
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ sort?: string; page?: string }>
 }
 
 const CATEGORY_META: Record<string, { name: string; description: string; emoji: string }> = {
@@ -33,13 +33,14 @@ async function getCategoryProducts(slug: string, sort?: string) {
   return data || []
 }
 
-export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> })  {
-  const meta = CATEGORY_META[params.slug] || { name: params.slug, description: '', emoji: '🛒' }
-  const products = await getCategoryProducts(params.slug, searchParams.sort)
+export default async function CategoryPage({ params, searchParams }: PageProps) {
+  const { slug } = await params
+  const { sort } = await searchParams
+  const meta = CATEGORY_META[slug] || { name: slug, description: '', emoji: '🛒' }
+  const products = await getCategoryProducts(slug, sort)
 
   return (
     <div className="container-custom py-8">
-      {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-6">
         <Link href="/" className="hover:text-brand-600">Home</Link>
         <span className="mx-2">/</span>
@@ -48,7 +49,6 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         <span className="text-gray-800">{meta.name}</span>
       </nav>
 
-      {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-3">
           <span className="text-4xl">{meta.emoji}</span>
@@ -57,7 +57,6 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         {meta.description && <p className="text-gray-600 max-w-2xl">{meta.description}</p>}
       </div>
 
-      {/* Sort controls */}
       <div className="flex items-center justify-between mb-6 border-b pb-4">
         <span className="text-sm text-gray-500">{products.length} products</span>
         <div className="flex items-center gap-2 text-sm">
@@ -68,8 +67,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
             { label: 'Price ↓', value: 'price_desc' },
           ].map(s => (
             <Link key={s.value}
-              href={`/category/${params.slug}?sort=${s.value}`}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${(searchParams.sort || '') === s.value ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              href={`/category/${slug}?sort=${s.value}`}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${(sort || '') === s.value ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
               {s.label}
             </Link>
           ))}
